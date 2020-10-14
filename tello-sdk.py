@@ -70,6 +70,7 @@ class TelloVideo:
 
         self.stream = None
         self.receiver = None
+        self.receiving = True
         self.is_open = False
 
     def start(self):
@@ -83,7 +84,7 @@ class TelloVideo:
         self.receiver.start()
 
     def update(self):
-        while True:
+        while self.receiving:
             ret, frame = self.udp_video_address.read()
             cv2.imshow('Tello', frame)
             if cv2.waitKey(1) & 0xFF == ord('q') or not self.is_open:
@@ -94,6 +95,11 @@ class TelloVideo:
         self.receiver.join()
         self.udp_video_address.release()
         cv2.destroyAllWindows()
+
+    def __del__(self):
+        self.close()
+        self.receiving = False
+        self.receiver.join()
 
 
 class Tello:
@@ -109,6 +115,7 @@ class Tello:
 
         self.response = []
 
+        self.receiving = True
         self.receiver = threading.Thread(target=self._receive)
         self.receiver.daemon = True
         self.receiver.start()
@@ -117,6 +124,11 @@ class Tello:
 
     def _send_command(self, command):
         self.socket.sendto(command.encode("utf-8"), (self.tello_addr, self.sender_port))
+
+    def __del__(self):
+        self.receiving = False
+        self.receiver.join()
+        self.socket.close()
 
     def command(self):
         """
@@ -294,7 +306,7 @@ class Tello:
         return "timeout"
 
     def _receive(self):
-        while True:
+        while self.receiving:
             try:
                 resp, ip = self.socket.recvfrom(1024)
                 if "temph" not in resp.decode():
